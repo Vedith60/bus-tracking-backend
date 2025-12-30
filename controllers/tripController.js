@@ -8,9 +8,21 @@ const tripController = {
   // Create a new trip
   async createTrip(req, res) {
     try {
-      const { bus_id, driver_id, route_id, temporary_route } = req.body;
+      const { bus_id, driver_id, route_id, temporary_route, supervisor_id: req_supervisor_id } = req.body;
       const admin_id = req.user.admin_id;
-      const supervisor_id = req.user.id; // Supervisor who is creating the trip
+      
+      // Use the supervisor_id from request body if provided and user is admin, otherwise use the logged-in user's id
+      let supervisor_id;
+      if (req.user.role === 'admin' && req_supervisor_id) {
+        // Admin is creating a trip and specifying a supervisor
+        supervisor_id = req_supervisor_id;
+      } else if (req.user.role === 'supervisor') {
+        // Supervisor is creating a trip, use their own ID
+        supervisor_id = req.user.id;
+      } else {
+        // Fallback to logged-in user ID
+        supervisor_id = req.user.id;
+      }
       
       // Validate that the bus belongs to the admin
       const bus = await Bus.findById(bus_id);
@@ -32,12 +44,10 @@ const tripController = {
         }
       }
       
-      // Validate that the supervisor belongs to the admin (for supervisors)
-      if (req.user.role === 'supervisor') {
-        const supervisor = await Supervisor.findById(supervisor_id);
-        if (!supervisor || supervisor.admin_id !== admin_id) {
-          return res.status(400).json({ message: 'Invalid supervisor' });
-        }
+      // Validate that the supervisor belongs to the admin
+      const supervisor = await Supervisor.findById(supervisor_id);
+      if (!supervisor || supervisor.admin_id !== admin_id) {
+        return res.status(400).json({ message: 'Invalid supervisor' });
       }
       
       // Set trip date to today if not provided
